@@ -1,0 +1,13 @@
+# 临时调试脚本
+tmp-*.js
+
+# 测试录音与识别产物
+tools/audio-api/*.wav
+tools/audio-api/*.json
+
+# 运行时目录
+runtime/
+*.log
+
+# 依赖
+node_modules/

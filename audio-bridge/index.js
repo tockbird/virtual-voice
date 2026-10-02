@@ -4,6 +4,7 @@ const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
 const { existsSync, mkdirSync, rmSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
+const { normalizeChineseSpokenText } = require('./normalizer');
 
 function createTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
@@ -19,7 +20,10 @@ class VirtualAudioBridge {
       runtimeDir: options.runtimeDir || join(os.tmpdir(), 'virtual-audio-bridge'),
       inputDevice: options.inputDevice || 'audio=CABLE Output (VB-Audio Virtual Cable)',
       outputDevicePrefix: options.outputDevicePrefix || 'CABLE Input',
-      asrCulture: options.asrCulture || 'zh-CN'
+      asrCulture: options.asrCulture || 'zh-CN',
+      addressAliases: options.addressAliases || {},
+      regionAliases: options.regionAliases || {},
+      termAliases: options.termAliases || {}
     };
   }
 
@@ -383,9 +387,14 @@ exit [WaveOutPlayer]::Play($env:WAV_PATH, $env:WAV_DEVICE_PREFIX)
         $engine.Dispose()
       }
     `;
-    return this.#runPowershell(asrCommand, 'Windows 语音识别', {
+    const rawText = this.#runPowershell(asrCommand, 'Windows 语音识别', {
       ASR_INPUT: file,
       ASR_CULTURE: culture
+    });
+    return normalizeChineseSpokenText(rawText, {
+      addressAliases: this.config.addressAliases,
+      regionAliases: this.config.regionAliases,
+      termAliases: this.config.termAliases
     });
   }
 
