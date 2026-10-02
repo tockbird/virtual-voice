@@ -1,12 +1,15 @@
-const http = require('node:http');
+'use strict';
 
-const port = Number(process.env.PORT || 3000);
+const path = require('node:path');
+const { VirtualAudioBridge } = require('./audio-bridge');
 
-const server = http.createServer((_request, response) => {
-  response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  response.end('Hello, Node.js!\n');
+const audio = new VirtualAudioBridge({
+  ffmpegPath: path.join(__dirname, 'tools', 'ffmpeg', 'bin', 'ffmpeg.exe'),
+  runtimeDir: path.join(__dirname, 'tools', 'audio-api')
 });
 
-server.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-});
+console.log('virtual-audio-bridge SDK 已加载');
+console.log('可用方法:', Object.getOwnPropertyNames(Object.getPrototypeOf(audio)).filter((name) => name !== 'constructor').join(', '));
+console.log('运行目录:', audio.config.runtimeDir);
+
+module.exports = audio;

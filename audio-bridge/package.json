@@ -1,0 +1,7 @@
+{
+  "name": "virtual-audio-bridge",
+  "version": "1.0.0",
+  "description": "Windows VB-CABLE text-to-speech playback and speech-to-text bridge for Node.js",
+  "main": "index.js",
+  "license": "ISC"
+}
