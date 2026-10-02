@@ -2,7 +2,7 @@
 
 const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
-const { existsSync, mkdirSync, rmSync } = require('node:fs');
+const { existsSync, mkdirSync, rmSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 
 function createTimestamp() {
@@ -10,6 +10,9 @@ function createTimestamp() {
 }
 
 class VirtualAudioBridge {
+  #recording = null;
+  #callRecording = null;
+
   constructor(options = {}) {
     this.config = {
       ffmpegPath: options.ffmpegPath || 'ffmpeg',
@@ -124,10 +127,11 @@ exit [WaveOutPlayer]::Play($env:WAV_PATH, $env:WAV_DEVICE_PREFIX)
     });
   }
 
-  async speak({ text, voice, rate }) {
+  async #speak({ text, voice, rate }) {
     if (!text || typeof text !== 'string') throw new Error('缺少 text 字段');
     const trimmedText = text.trim();
     if (!trimmedText) throw new Error('text 不能为空');
+    const startedAt = Date.now();
 
     mkdirSync(this.config.runtimeDir, { recursive: true });
     const output = join(this.config.runtimeDir, `speak-${createTimestamp()}.wav`);
@@ -164,10 +168,207 @@ exit [WaveOutPlayer]::Play($env:WAV_PATH, $env:WAV_DEVICE_PREFIX)
     if (!existsSync(output)) throw new Error('TTS 合成完成，但未生成音频文件');
 
     this.#playWavToOutputDevice(output);
-    return { text: trimmedText, voice: selectedVoice || 'default', audioFile: output };
+    const result = { text: trimmedText, voice: selectedVoice || 'default', audioFile: output };
+
+    if (this.#callRecording) {
+      this.#callRecording.agentSegments.push({
+        offsetSeconds: Number(((startedAt - this.#callRecording.startedAt) / 1000).toFixed(3)),
+        text: trimmedText,
+        voice: result.voice,
+        audioFile: output
+      });
+    }
+
+    return result;
   }
 
-  transcribeFile(inputFile, culture = this.config.asrCulture) {
+  #startRecording(options = {}) {
+    if (this.#recording) throw new Error('已有录音任务正在进行，请先停止当前录音');
+
+    const sampleRate = Number(options.sampleRate || 16000);
+    const channels = Number(options.channels || 1);
+    const format = options.format === 'mp3' ? 'mp3' : 'wav';
+    const safeName = String(options.fileName || `call-${createTimestamp()}`).replace(/[^\w.-]+/g, '_');
+    const output = join(this.config.runtimeDir, `${safeName}.${format}`);
+
+    mkdirSync(this.config.runtimeDir, { recursive: true });
+    rmSync(output, { force: true });
+
+    const args = ['-hide_banner', '-y', '-f', 'dshow', '-i', this.config.inputDevice, '-ar', String(sampleRate), '-ac', String(channels)];
+    if (format === 'mp3') args.push('-c:a', 'libmp3lame', '-b:a', '128k');
+    else args.push('-c:a', 'pcm_s16le');
+    args.push(output);
+
+    const child = spawn(this.config.ffmpegPath, args, { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+
+    const done = new Promise((resolvePromise, reject) => {
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (this.#recording && this.#recording.child === child) this.#recording = null;
+        if (code === 0 || code === 255) return resolvePromise(stderr);
+        reject(new Error(`录音失败，退出码 ${code}\n${stderr}`));
+      });
+    });
+
+    this.#recording = { child, output, startedAt: Date.now(), sampleRate, channels, format, done };
+    return {
+      audioFile: output,
+      startedAt: this.#recording.startedAt,
+      inputDevice: this.config.inputDevice,
+      sampleRate,
+      channels,
+      format
+    };
+  }
+
+  async #stopRecording() {
+    const recording = this.#recording;
+    if (!recording) throw new Error('当前没有正在进行的录音');
+    this.#recording = null;
+
+    try {
+      recording.child.stdin.write('q');
+      recording.child.stdin.end();
+    } catch {}
+
+    await recording.done;
+    if (!existsSync(recording.output)) throw new Error('录音已停止，但未生成音频文件');
+
+    const endedAt = Date.now();
+    return {
+      audioFile: recording.output,
+      startedAt: recording.startedAt,
+      endedAt,
+      durationMs: endedAt - recording.startedAt,
+      durationSeconds: Number(((endedAt - recording.startedAt) / 1000).toFixed(3)),
+      sampleRate: recording.sampleRate,
+      channels: recording.channels,
+      format: recording.format,
+      inputDevice: this.config.inputDevice
+    };
+  }
+
+  async #record({ duration, fileName, sampleRate = 16000, channels = 1, format = 'wav' } = {}) {
+    const seconds = Number(duration);
+    if (!Number.isFinite(seconds) || seconds < 1 || seconds > 24 * 60 * 60) {
+      throw new Error('duration 必须是 1 到 86400 之间的数字');
+    }
+
+    const startedAt = Date.now();
+    const safeName = String(fileName || `call-${createTimestamp()}`).replace(/[^\w.-]+/g, '_');
+    const output = join(this.config.runtimeDir, `${safeName}.${format === 'mp3' ? 'mp3' : 'wav'}`);
+    mkdirSync(this.config.runtimeDir, { recursive: true });
+    rmSync(output, { force: true });
+
+    const args = ['-hide_banner', '-y', '-f', 'dshow', '-i', this.config.inputDevice, '-t', String(seconds), '-ar', String(sampleRate), '-ac', String(channels)];
+    if (format === 'mp3') args.push('-c:a', 'libmp3lame', '-b:a', '128k');
+    else args.push('-c:a', 'pcm_s16le');
+    args.push(output);
+
+    await this.#runFfmpeg(args, '录制通话内容');
+    if (!existsSync(output)) throw new Error('录音完成，但未生成音频文件');
+
+    const endedAt = Date.now();
+    return {
+      audioFile: output,
+      duration: seconds,
+      durationMs: endedAt - startedAt,
+      sampleRate,
+      channels,
+      format: format === 'mp3' ? 'mp3' : 'wav',
+      inputDevice: this.config.inputDevice
+    };
+  }
+
+  startCallRecording(options = {}) {
+    if (this.#callRecording) throw new Error('已有完整通话录音正在进行');
+    const started = this.#startRecording({
+      fileName: options.fileName ? `${options.fileName}-remote` : `call-${createTimestamp()}-remote`,
+      sampleRate: options.sampleRate || 16000,
+      channels: options.channels || 1,
+      format: options.format === 'mp3' ? 'mp3' : 'wav'
+    });
+    this.#callRecording = {
+      startedAt: started.startedAt,
+      remoteAudioFile: started.audioFile,
+      sampleRate: started.sampleRate,
+      channels: started.channels,
+      format: started.format,
+      agentSegments: []
+    };
+    return {
+      callStartedAt: this.#callRecording.startedAt,
+      remoteAudioFile: this.#callRecording.remoteAudioFile,
+      inputDevice: started.inputDevice,
+      sampleRate: this.#callRecording.sampleRate,
+      channels: this.#callRecording.channels,
+      format: this.#callRecording.format,
+      recordingAgentSpeech: true,
+      speak: (speakOptions) => this.#speak(speakOptions),
+      stop: (stopOptions) => this.stopCallRecording(stopOptions)
+    };
+  }
+
+  async stopCallRecording(options = {}) {
+    const call = this.#callRecording;
+    if (!call) throw new Error('当前没有正在进行的完整通话录音');
+    this.#callRecording = null;
+
+    const stopped = await this.#stopRecording();
+    const remoteAudioFile = stopped.audioFile;
+    const mixedAudioFile = join(this.config.runtimeDir, `${String(options.fileName || `call-${createTimestamp()}`).replace(/[^\w.-]+/g, '_')}-full.${call.format}`);
+    rmSync(mixedAudioFile, { force: true });
+
+    let fullAudioFile = remoteAudioFile;
+    if (call.agentSegments.length > 0) {
+      const inputs = ['-i', remoteAudioFile];
+      const labels = ['[a0]'];
+      const filters = ['[0:a]aformat=sample_fmts=fltp:sample_rates=16000:channel_layouts=mono,asetpts=PTS-STARTPTS[a0]'];
+
+      call.agentSegments.forEach((segment, index) => {
+        const delayMs = Math.max(0, Math.round(segment.offsetSeconds * 1000));
+        inputs.push('-i', segment.audioFile);
+        labels.push(`[a${index + 1}]`);
+        filters.push(`[${index + 1}:a]aformat=sample_fmts=fltp:sample_rates=16000:channel_layouts=mono,adelay=${delayMs}|${delayMs},asetpts=PTS-STARTPTS[a${index + 1}]`);
+      });
+
+      filters.push(`${labels.join('')}amix=inputs=${labels.length}:duration=longest:normalize=0,volume=2[aout]`);
+      await this.#runFfmpeg([
+        '-hide_banner', '-y',
+        ...inputs,
+        '-filter_complex', filters.join(';'),
+        '-map', '[aout]',
+        '-ar', String(call.sampleRate),
+        '-ac', String(call.channels),
+        '-c:a', call.format === 'mp3' ? 'libmp3lame' : 'pcm_s16le',
+        mixedAudioFile
+      ], '合成完整通话录音');
+      if (!existsSync(mixedAudioFile)) throw new Error('完整通话录音合成失败');
+      fullAudioFile = mixedAudioFile;
+    }
+
+    const metadata = {
+      callStartedAt: call.startedAt,
+      callEndedAt: stopped.endedAt,
+      remoteAudioFile,
+      fullAudioFile,
+      inputDevice: stopped.inputDevice,
+      sampleRate: stopped.sampleRate,
+      channels: stopped.channels,
+      format: stopped.format,
+      agentSegments: call.agentSegments
+    };
+    writeFileSync(`${fullAudioFile}.json`, JSON.stringify(metadata, null, 2), 'utf8');
+
+    return {
+      ...metadata,
+      metadataFile: `${fullAudioFile}.json`
+    };
+  }
+
+  #transcribeFile(inputFile, culture = this.config.asrCulture) {
     const file = resolve(String(inputFile));
     if (!existsSync(file)) throw new Error(`音频文件不存在: ${file}`);
     const asrCommand = `
@@ -188,7 +389,7 @@ exit [WaveOutPlayer]::Play($env:WAV_PATH, $env:WAV_DEVICE_PREFIX)
     });
   }
 
-  async listen({ duration = 8, culture = this.config.asrCulture, audioFile, mockTranscript } = {}) {
+  async #listen({ duration = 8, culture = this.config.asrCulture, audioFile, mockTranscript } = {}) {
     let output;
     let fromRecording = false;
 
@@ -218,7 +419,7 @@ exit [WaveOutPlayer]::Play($env:WAV_PATH, $env:WAV_DEVICE_PREFIX)
       if (!existsSync(output)) throw new Error('录音完成，但未生成音频文件');
     }
 
-    const text = this.transcribeFile(output, culture);
+    const text = this.#transcribeFile(output, culture);
     return { text, duration: audioFile ? undefined : Number(duration), audioFile: output, fromRecording };
   }
 }

@@ -1,0 +1,18 @@
+{
+  "callStartedAt": 1790908692858,
+  "callEndedAt": 1790908698773,
+  "remoteAudioFile": "E:\\virtual-voice\\tools\\audio-api\\public-api-only-test-remote.wav",
+  "fullAudioFile": "E:\\virtual-voice\\tools\\audio-api\\public-api-only-test-full.wav",
+  "inputDevice": "audio=CABLE Output (VB-Audio Virtual Cable)",
+  "sampleRate": 16000,
+  "channels": 1,
+  "format": "wav",
+  "agentSegments": [
+    {
+      "offsetSeconds": 0,
+      "text": "现在只暴露完整通话录音接口",
+      "voice": "Microsoft Huihui Desktop",
+      "audioFile": "E:\\virtual-voice\\tools\\audio-api\\speak-2026-10-02T02-38-12-859Z.wav"
+    }
+  ]
+}
