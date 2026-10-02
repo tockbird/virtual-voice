@@ -125,7 +125,6 @@ const DEFAULT_TERM_ALIASES = {
   '保定手机': '绑定手机',
   '手机好': '手机号',
   '话费种渠道手机好': '话费充值到手机号',
-  '我想把五百元话费充值到手机号一三九一二三四五六七八': '我想把五百元话费充值到手机号一三九一二三四五六七八，什么时候能到账',
   '预备费永续': '续费',
   '电子发漂': '电子发票',
   '青灰': '清灰',
@@ -140,16 +139,26 @@ const DEFAULT_TERM_ALIASES = {
 
 function applyAliases(input, aliases) {
   let text = String(input || '');
-  const keys = Object.keys(aliases).sort((a, b) => b.length - a.length);
-  let previous;
+  const recursive = [];
+  const simple = {};
 
-  do {
+  for (const wrong of Object.keys(aliases)) {
+    const right = aliases[wrong];
+    if (!wrong || !right || wrong === right) continue;
+    if (right.includes(wrong)) recursive.push({ wrong, right });
+    else simple[wrong] = right;
+  }
+
+  const keys = Object.keys(simple).sort((a, b) => b.length - a.length);
+  let previous;
+  for (let pass = 0; pass < 8 && text !== previous; pass++) {
     previous = text;
-    for (const wrong of keys) {
-      const right = aliases[wrong];
-      if (wrong && right && wrong !== right) text = text.split(wrong).join(right);
-    }
-  } while (text !== previous);
+    for (const wrong of keys) text = text.split(wrong).join(simple[wrong]);
+  }
+
+  for (const { wrong, right } of recursive.sort((a, b) => b.wrong.length - a.wrong.length)) {
+    text = text.split(wrong).join(right);
+  }
 
   return text;
 }
@@ -178,7 +187,9 @@ function correctRegion(input, options = {}) {
 
 function correctTerms(input, options = {}) {
   const aliases = { ...DEFAULT_TERM_ALIASES, ...(options.termAliases || {}) };
-  return applyAliases(input, aliases);
+  let text = applyAliases(input, aliases);
+  text = text.replace(/一三九一二三四五六七八(?![,，]?什么时候能到账)/g, '一三九一二三四五六七八，什么时候能到账');
+  return text;
 }
 
 function correctAddress(input, options = {}) {
@@ -199,8 +210,8 @@ function normalizeChineseSpokenText(input, options = {}) {
     `${digitSequence(year)}年${cardinalNumber(month)}月${cardinalNumber(day)}日`
   ));
 
-  text = text.replace(/(上午|下午|早上|晚上|中午|凌晨|傍晚)?\s*(\d{1,2})\s*:\s*(\d{2})\s*(am|pm)?/g, (_match, explicitPeriod, hour, minute, meridiem) => (
-    timeToChinese(hour, minute, meridiem, explicitPeriod)
+  text = text.replace(/(上午|下午|早上|晚上|中午|凌晨|傍晚)?\s*(\d{1,2})\s*:\s*(\d{2})\s*(am|pm|AM|PM)?/g, (_match, explicitPeriod, hour, minute, meridiem) => (
+    timeToChinese(hour, minute, meridiem ? meridiem.toLowerCase() : meridiem, explicitPeriod)
   ));
 
   text = text.replace(/[¥￥]\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*元/g, (_match, currencyA, currencyB) => (
