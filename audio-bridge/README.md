@@ -410,30 +410,6 @@ Windows 软电话建议这样配置：
 
 如果只把软电话扬声器设置为系统默认扬声器，而没有输出到 `CABLE Input`，SDK 可能录不到对端声音。
 
-## 沙箱和权限
-
-在 Trae 或其他受控沙箱中，Windows 语音组件可能需要写入：
-
-```text
-%LOCALAPPDATA%\speech
-%LOCALAPPDATA%\Microsoft\Speech
-%APPDATA%\Microsoft\Speech
-```
-
-如果遇到：
-
-```text
-TRAE Sandbox Error: hit restricted
-E_ACCESSDENIED
-```
-
-处理方式：
-
-1. 使用非沙箱模式运行 Node 进程；或
-2. 在 Trae 设置中把 `node`、`powershell` 加入命令白名单；或
-3. 配置允许写入上述 Windows 语音目录。
-
-建议真实业务在普通 Windows 服务或终端中运行，避免沙箱拦截 TTS/ASR。
 
 ## 注意事项
 
