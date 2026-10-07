@@ -53,15 +53,15 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
 ```js
 const audio = new VirtualAudioBridge({
-  ffmpegPath: 'E:/tools/ffmpeg/bin/ffmpeg.exe',
-  runtimeDir: 'E:/project/runtime/audio'
+  ffmpegPath: 'tools/ffmpeg/bin/ffmpeg.exe',
+  runtimeDir: 'runtime/audio'
 });
 ```
 
 检查 FFmpeg 是否可用：
 
 ```powershell
-E:\tools\ffmpeg\bin\ffmpeg.exe -version
+tools/ffmpeg/bin/ffmpeg.exe -version
 ```
 
 ### 3. 安装并配置 VB-CABLE
@@ -92,8 +92,8 @@ CABLE Output
 const { VirtualAudioBridge } = require('./audio-bridge');
 
 const audio = new VirtualAudioBridge({
-  ffmpegPath: 'E:/tools/ffmpeg/bin/ffmpeg.exe',
-  runtimeDir: 'E:/project/runtime/audio'
+  ffmpegPath: 'tools/ffmpeg/bin/ffmpeg.exe',
+  runtimeDir: 'runtime/audio'
 });
 
 const call = audio.startCallRecording({ fileName: 'env-check' });
@@ -188,8 +188,8 @@ const audio = new VirtualAudioBridge({
 const { createAudioBridge } = require('./audio-bridge');
 
 const audio = createAudioBridge({
-  ffmpegPath: 'E:/project/tools/ffmpeg/bin/ffmpeg.exe',
-  runtimeDir: 'E:/project/runtime/audio'
+  ffmpegPath: 'tools/ffmpeg/bin/ffmpeg.exe',
+  runtimeDir: 'runtime/audio'
 });
 ```
 
@@ -197,8 +197,8 @@ const audio = createAudioBridge({
 
 ```js
 const audio = new VirtualAudioBridge({
-  ffmpegPath: 'E:/project/tools/ffmpeg/bin/ffmpeg.exe',
-  runtimeDir: 'E:/project/runtime/audio',
+  ffmpegPath: 'tools/ffmpeg/bin/ffmpeg.exe',
+  runtimeDir: 'runtime/audio',
   inputDevice: 'audio=CABLE Output (VB-Audio Virtual Cable)',
   outputDevicePrefix: 'CABLE Input',
   asrCulture: 'zh-CN',
@@ -276,7 +276,7 @@ await call.speak({
 {
   text: 'Agent 播放的文本',
   voice: 'Microsoft Huihui Desktop',
-  audioFile: 'E:/project/runtime/audio/speak-xxx.wav',
+  audioFile: 'runtime/audio/speak-xxx.wav',
   offsetSeconds: 1.234
 }
 ```
@@ -297,9 +297,9 @@ const result = await call.stop({
 {
   callStartedAt: 1790907500000,
   callEndedAt: 1790907560000,
-  remoteAudioFile: 'E:/project/runtime/audio/call-20261002-001-remote.wav',
-  fullAudioFile: 'E:/project/runtime/audio/call-20261002-001-full.wav',
-  metadataFile: 'E:/project/runtime/audio/call-20261002-001-full.wav.json',
+  remoteAudioFile: 'runtime/audio/call-20261002-001-remote.wav',
+  fullAudioFile: 'runtime/audio/call-20261002-001-full.wav',
+  metadataFile: 'runtime/audio/call-20261002-001-full.wav.json',
   inputDevice: 'audio=CABLE Output (VB-Audio Virtual Cable)',
   sampleRate: 16000,
   channels: 1,
@@ -309,7 +309,7 @@ const result = await call.stop({
       offsetSeconds: 0.123,
       text: '您好，请问有什么可以帮您？',
       voice: 'Microsoft Huihui Desktop',
-      audioFile: 'E:/project/runtime/audio/speak-xxx.wav'
+      audioFile: 'runtime/audio/speak-xxx.wav'
     }
   ]
 }
@@ -332,8 +332,8 @@ const result = await call.stop({
 const { VirtualAudioBridge } = require('./audio-bridge');
 
 const audio = new VirtualAudioBridge({
-  ffmpegPath: 'E:/project/tools/ffmpeg/bin/ffmpeg.exe',
-  runtimeDir: 'E:/project/runtime/audio'
+  ffmpegPath: 'tools/ffmpeg/bin/ffmpeg.exe',
+  runtimeDir: 'runtime/audio'
 });
 
 async function handleCall() {
@@ -382,8 +382,8 @@ TTS 临时音频默认也会保存在 `runtimeDir` 下，文件名以 `speak-` �
 
 ```js
 const audio = new VirtualAudioBridge({
-  ffmpegPath: 'E:/project/tools/ffmpeg/bin/ffmpeg.exe',
-  runtimeDir: 'E:/project/runtime/audio',
+  ffmpegPath: 'tools/ffmpeg/bin/ffmpeg.exe',
+  runtimeDir: 'runtime/audio',
   addressAliases: {
     '菜鸟驿站的器械马': '菜鸟驿站的取件码'
   },
@@ -415,9 +415,9 @@ Windows 软电话建议这样配置：
 在 Trae 或其他受控沙箱中，Windows 语音组件可能需要写入：
 
 ```text
-C:\Users\<user>\AppData\Local\speech
-C:\Users\<user>\AppData\Local\Microsoft\Speech
-C:\Users\<user>\AppData\Roaming\Microsoft\Speech
+%LOCALAPPDATA%\speech
+%LOCALAPPDATA%\Microsoft\Speech
+%APPDATA%\Microsoft\Speech
 ```
 
 如果遇到：
